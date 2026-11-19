@@ -40,6 +40,7 @@ Guidelines for AI agents and contributors working on Notch Hub.
 ## Testing
 
 - Run with `npm start` (or `npm run start:open`).
+- After every change, restart the app for the user: kill the running Electron instance of this project, then start it again in the background with `npm start`.
 - Prefer in-app checks (`webContents.capturePage`, `executeJavaScript`) over moving the real mouse or keyboard. Revert any temporary test patch.
 
 ## Git
