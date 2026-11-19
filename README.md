@@ -62,7 +62,7 @@ The app uses OAuth 2.0 for installed apps with PKCE and a loopback redirect (`12
 
 | Key | Description |
 |---|---|
-| `assistantName`, `userName` | Name shown in the sidebar and greeting |
+| `assistantName`, `userName` | Name shown in the top bar and greeting |
 | `hotkey` | Global shortcut, in [Electron accelerator](https://www.electronjs.org/docs/latest/api/accelerator) format. Also editable in Settings. |
 | `accentColor` | Hex color used across the UI. Also editable in Settings. |
 | `startWithWindows` | Launch at login. Also editable in Settings. |
