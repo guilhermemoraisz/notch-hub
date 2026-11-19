@@ -32,6 +32,15 @@ npm install
 npm start          # or: npm run start:open  (starts expanded)
 ```
 
+### Desktop and Start menu shortcuts
+
+```bash
+npm run icon        # (re)generates assets/icon.ico from the robot face
+npm run shortcuts   # creates "Notch Hub" on the Desktop and in the Start menu
+```
+
+To use another eye color, run `powershell -ExecutionPolicy Bypass -File scripts/make-icon.ps1 -EyeColor '#4cc9f0'`. To delete the shortcuts, run `scripts/install-shortcuts.ps1 -Remove`. If you move the project folder, run `npm run shortcuts` again.
+
 On the first run the app copies its defaults from `config.example.json`. Your changes are saved to `config.json`, which is git-ignored.
 
 ### Google Calendar (optional)
