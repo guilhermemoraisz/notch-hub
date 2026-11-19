@@ -81,6 +81,18 @@ notch.onState((s) => {
   if (state.expanded) refreshCalendarIfStale();
 });
 
+// Calendar alerts: slow yellow blink for a notification, fast red one when the event starts.
+notch.onAlert((kind, blinks) => {
+  notchEl.classList.remove('alert-reminder', 'alert-start');
+  if (!kind) return; // alert cancelled
+  notchEl.style.setProperty('--alert-count', String(blinks));
+  void notchEl.offsetWidth; // restart the animation
+  notchEl.classList.add(`alert-${kind}`);
+});
+notchEl.addEventListener('animationend', (e) => {
+  if (e.target === notchEl) notchEl.classList.remove('alert-reminder', 'alert-start');
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     // Esc closes the shortcut dialog first, then the notch.
@@ -870,6 +882,41 @@ $('#toggle-startup').addEventListener('click', async () => {
   }
 });
 
+// Calendar alerts settings: one toggle and stepper set per alert.
+function renderAlertSettings(alerts) {
+  for (const btn of document.querySelectorAll('[data-toggle]')) btn.setAttribute('aria-checked', String(alerts[btn.dataset.toggle]));
+  for (const box of document.querySelectorAll('.stepper')) {
+    const value = alerts[box.dataset.key];
+    box.querySelector('.stepper-value').textContent = value;
+    box.querySelector('[data-step="-1"]').disabled = value <= Number(box.dataset.min);
+    box.querySelector('[data-step="1"]').disabled = value >= Number(box.dataset.max);
+  }
+  $('#alert-row-reminder').classList.toggle('off', !alerts.reminderEnabled);
+  $('#alert-row-start').classList.toggle('off', !alerts.startEnabled);
+}
+
+async function saveAlerts(patch) {
+  // Show the change at once, then trust what main saved (it clamps values).
+  state.config.alerts = { ...state.config.alerts, ...patch };
+  renderAlertSettings(state.config.alerts);
+  const saved = await notch.saveSettings({ alerts: patch });
+  state.config.alerts = saved.alerts;
+  renderAlertSettings(saved.alerts);
+}
+
+for (const btn of document.querySelectorAll('[data-toggle]')) {
+  btn.addEventListener('click', () => saveAlerts({ [btn.dataset.toggle]: btn.getAttribute('aria-checked') !== 'true' }));
+}
+for (const box of document.querySelectorAll('.stepper')) {
+  box.addEventListener('click', (e) => {
+    const step = Number(e.target.closest('[data-step]')?.dataset.step);
+    if (!step) return;
+    const { key, min, max } = box.dataset;
+    const next = Math.min(Number(max), Math.max(Number(min), state.config.alerts[key] + step));
+    if (next !== state.config.alerts[key]) saveAlerts({ [key]: next });
+  });
+}
+
 async function refreshGoogleStatus() {
   const s = await notch.google.status();
   const text = $('#google-status');
@@ -917,6 +964,7 @@ async function boot() {
   renderSwatches();
   applyAccent(state.config.accentColor);
   renderStartupToggle(state.config.startWithWindows);
+  renderAlertSettings(state.config.alerts);
   renderMediaSessions(await notch.mediaSessions());
 
   tickClock();

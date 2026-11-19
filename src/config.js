@@ -11,6 +11,8 @@ const DEFAULTS = {
   hideOutsideDesktop: true,
   // How hard to push (raw mouse counts). Higher = needs a stronger push.
   revealPush: 60,
+  // Calendar alerts: yellow blinks on each Google notification, red blink before the event starts.
+  alerts: { reminderEnabled: true, startEnabled: true, reminderBlinks: 2, startSeconds: 10, startLeadMinutes: 0 },
   apps: {},
 };
 
@@ -36,7 +38,10 @@ function loadConfig(dir) {
     // Fresh clone: start from the example (config.json is git-ignored).
     else user = readExample(dir);
   }
-  return { ...DEFAULTS, ...user, apps: { ...(user.apps ?? DEFAULTS.apps) } };
+  // Legacy single `enabled` switch becomes the two per-alert switches.
+  const { enabled, ...userAlerts } = user.alerts ?? {};
+  const legacy = typeof enabled === 'boolean' ? { reminderEnabled: enabled, startEnabled: enabled } : {};
+  return { ...DEFAULTS, ...user, alerts: { ...DEFAULTS.alerts, ...legacy, ...userAlerts }, apps: { ...(user.apps ?? DEFAULTS.apps) } };
 }
 
 /** Merges `patch` into config.json on disk, keeping every other key as is. */

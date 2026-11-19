@@ -177,6 +177,42 @@
             <button class="toggle" id="toggle-startup" role="switch" aria-checked="false" title="Iniciar com o Windows"><span></span></button>
           </div>
 
+          <div class="card setting setting-col">
+            <div class="setting-text">
+              <b>Alertas da agenda</b>
+              <span class="muted">O notch pisca nas notificações e no início de cada evento</span>
+            </div>
+            <div class="alert-row" id="alert-row-reminder">
+              <span class="alert-dot yellow"></span>
+              <div class="alert-label"><b>Notificação</b><span class="muted">Pisca em amarelo</span></div>
+              <div class="alert-fields">
+                <div class="stepper" data-key="reminderBlinks" data-min="1" data-max="10" title="Quantas vezes pisca">
+                  <button type="button" data-step="-1" aria-label="Diminuir">−</button>
+                  <span class="stepper-value"></span><span class="stepper-unit">piscadas</span>
+                  <button type="button" data-step="1" aria-label="Aumentar">+</button>
+                </div>
+              </div>
+              <button class="toggle" data-toggle="reminderEnabled" role="switch" aria-checked="true" title="Alerta amarelo"><span></span></button>
+            </div>
+            <div class="alert-row" id="alert-row-start">
+              <span class="alert-dot red"></span>
+              <div class="alert-label"><b>Início do evento</b><span class="muted">Pisca rápido em vermelho</span></div>
+              <div class="alert-fields">
+                <div class="stepper" data-key="startSeconds" data-min="1" data-max="60" title="Quanto tempo pisca">
+                  <button type="button" data-step="-1" aria-label="Diminuir">−</button>
+                  <span class="stepper-value"></span><span class="stepper-unit">seg</span>
+                  <button type="button" data-step="1" aria-label="Aumentar">+</button>
+                </div>
+                <div class="stepper" data-key="startLeadMinutes" data-min="0" data-max="60" title="Quanto tempo antes do evento (0 = na hora)">
+                  <button type="button" data-step="-1" aria-label="Diminuir">−</button>
+                  <span class="stepper-value"></span><span class="stepper-unit">min antes</span>
+                  <button type="button" data-step="1" aria-label="Aumentar">+</button>
+                </div>
+              </div>
+              <button class="toggle" data-toggle="startEnabled" role="switch" aria-checked="true" title="Alerta vermelho"><span></span></button>
+            </div>
+          </div>
+
           <div class="card setting">
             <div class="setting-text">
               <b>Google Agenda</b>

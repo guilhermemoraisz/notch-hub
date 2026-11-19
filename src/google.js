@@ -258,6 +258,13 @@ async function api(pathname, params = {}) {
   return data;
 }
 
+/** Minutes before start of each popup notification (the event's own, or the calendar default). */
+function popupMinutes(event, calendar) {
+  const reminders = event.reminders ?? { useDefault: true };
+  const list = reminders.useDefault ? calendar.defaultReminders ?? [] : reminders.overrides ?? [];
+  return list.filter((r) => r.method === 'popup').map((r) => r.minutes);
+}
+
 /** Events between two ISO instants, from every calendar checked in Google Agenda. */
 async function listEvents(timeMin, timeMax) {
   const { items: calendars = [] } = await api('users/me/calendarList', { minAccessRole: 'reader' });
@@ -282,6 +289,7 @@ async function listEvents(timeMin, timeMax) {
             allDay: !e.start.dateTime,
             color: EVENT_COLORS[e.colorId] ?? cal.backgroundColor ?? '#039be5',
             link: e.htmlLink,
+            reminders: popupMinutes(e, cal),
           }));
       }),
   );

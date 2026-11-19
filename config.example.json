@@ -6,6 +6,7 @@
   "hideOutsideDesktop": true,
   "revealPush": 60,
   "accentColor": "#7ed957",
+  "alerts": { "reminderEnabled": true, "startEnabled": true, "reminderBlinks": 2, "startSeconds": 10, "startLeadMinutes": 0 },
   "apps": {
     "spotify": "spotify:",
     "youtube": "https://www.youtube.com",

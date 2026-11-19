@@ -4,6 +4,7 @@ const { loadConfig, saveConfig } = require('./src/config');
 const actions = require('./src/actions');
 const google = require('./src/google');
 const shortcuts = require('./src/shortcuts');
+const { startAlerts } = require('./src/alerts');
 const { startEdgeWatcher } = require('./src/edge');
 const { startMediaWatcher } = require('./src/media');
 
@@ -59,6 +60,33 @@ let pushTotal = 0;
 let lastPushAt = 0;
 let stopEdgeWatcher = null;
 
+let alerts = null;
+let alertTimer = null;
+const BLINK_MS = { reminder: 1400, start: 400 }; // must match the CSS animations
+const ALERT_LIMITS = { reminderBlinks: [1, 10], startSeconds: [1, 60], startLeadMinutes: [0, 60] };
+
+/** Blink the notch; when hidden, show the pill just for the blink. Never over fullscreen. */
+function flashAlert(kind) {
+  const { reminderEnabled, startEnabled, reminderBlinks, startSeconds } = config.alerts;
+  if (fullscreen || !(kind === 'reminder' ? reminderEnabled : startEnabled)) return;
+  const durationMs = kind === 'reminder' ? reminderBlinks * BLINK_MS.reminder : startSeconds * 1000;
+  clearTimeout(alertTimer);
+  if (concealed && notchState === 'collapsed') reveal();
+  send('notch:alert', kind, Math.round(durationMs / BLINK_MS[kind]));
+  alertTimer = setTimeout(() => {
+    alertTimer = null;
+    applyVisibility();
+  }, durationMs);
+}
+
+/** Stop a running blink (the user came to the notch, so it did its job). */
+function cancelAlert() {
+  if (!alertTimer) return;
+  clearTimeout(alertTimer);
+  alertTimer = null;
+  send('notch:alert', null);
+}
+
 let mediaWatcher = null;
 let mediaSessions = [];
 
@@ -73,12 +101,14 @@ function boundsFor(kind) {
 /** `force`: open even over a fullscreen app (only the hotkey does this). */
 function expand({ focus = false, arm = true, force = false } = {}) {
   if (fullscreen && !force) return;
+  cancelAlert();
   clearTimeout(collapseTimer);
   const wasHidden = concealed;
   if (notchState !== 'expanded') {
     win.setBounds(boundsFor('expanded'));
     notchState = 'expanded';
     send('notch:state', 'expanded');
+    alerts?.refresh(); // pick up events just created in Google
   }
   armed = arm;
   outsideSince = null;
@@ -130,7 +160,7 @@ function applyVisibility() {
   }
   if (onDesktop || !config.hideOutsideDesktop) {
     if (concealed) reveal();
-  } else if (notchState === 'collapsed' && !concealed) {
+  } else if (notchState === 'collapsed' && !concealed && !alertTimer) {
     conceal();
   }
 }
@@ -258,6 +288,7 @@ function registerIpc() {
     userName: config.userName,
     hotkey: config.hotkey,
     accentColor: config.accentColor,
+    alerts: config.alerts,
     // Real OS state, so the toggle is right even if changed elsewhere.
     startWithWindows: app.getLoginItemSettings(loginItemOptions()).openAtLogin,
   }));
@@ -269,6 +300,17 @@ function registerIpc() {
       clean.accentColor = patch.accentColor;
     }
     if (typeof patch?.startWithWindows === 'boolean') clean.startWithWindows = patch.startWithWindows;
+    if (patch?.alerts && typeof patch.alerts === 'object') {
+      const next = { ...config.alerts };
+      for (const key of ['reminderEnabled', 'startEnabled']) {
+        if (typeof patch.alerts[key] === 'boolean') next[key] = patch.alerts[key];
+      }
+      for (const [key, [min, max]] of Object.entries(ALERT_LIMITS)) {
+        const n = Math.round(Number(patch.alerts[key]));
+        if (key in patch.alerts && Number.isFinite(n)) next[key] = Math.min(max, Math.max(min, n));
+      }
+      clean.alerts = next;
+    }
     if (typeof patch?.hotkey === 'string') {
       // Register first: only save a combination Windows actually accepted.
       if (!registerHotkey(patch.hotkey)) {
@@ -284,7 +326,11 @@ function registerIpc() {
   });
 
   ipcMain.handle('google:status', () => google.status());
-  ipcMain.handle('google:login', () => google.login());
+  ipcMain.handle('google:login', async () => {
+    const result = await google.login();
+    alerts?.refresh();
+    return result;
+  });
   ipcMain.handle('google:cancel', () => google.cancelLogin());
   ipcMain.handle('google:logout', () => google.logout());
   ipcMain.handle('google:events', async (_e, timeMin, timeMax) => {
@@ -390,6 +436,7 @@ if (!app.requestSingleInstanceLock()) {
     applyStartup();
     watchHover();
     startEdge();
+    alerts = startAlerts({ onAlert: (kind) => flashAlert(kind), startLeadMinutes: () => config.alerts.startLeadMinutes });
     mediaWatcher = startMediaWatcher({
       onSessions: (sessions) => {
         mediaSessions = sessions;
@@ -403,5 +450,6 @@ if (!app.requestSingleInstanceLock()) {
     globalShortcut.unregisterAll();
     stopEdgeWatcher?.();
     mediaWatcher?.stop();
+    alerts?.stop();
   });
 }

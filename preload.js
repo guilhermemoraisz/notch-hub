@@ -47,4 +47,5 @@ contextBridge.exposeInMainWorld('notch', {
   systemInfo: invoke('sys:info'),
 
   onState: listen('notch:state'),
+  onAlert: listen('notch:alert'),
 });
