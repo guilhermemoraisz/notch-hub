@@ -1,0 +1,17 @@
+{
+  "assistantName": "Sexta-feira",
+  "userName": "Your name",
+  "hotkey": "Control+Alt+Space",
+  "startWithWindows": false,
+  "hideOutsideDesktop": true,
+  "revealPush": 60,
+  "accentColor": "#7ed957",
+  "apps": {
+    "spotify": "spotify:",
+    "youtube": "https://www.youtube.com",
+    "notepad": "notepad",
+    "calculator": "calc",
+    "file explorer": "explorer",
+    "task manager": "taskmgr"
+  }
+}

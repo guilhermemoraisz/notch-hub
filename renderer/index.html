@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>Notch Hub</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="notch" class="collapsed">
+    <!-- Collapsed pill -->
+    <div id="pill">
+      <div class="avatar sm"><span></span><span></span></div>
+      <span class="dot" id="pill-dot" title="Mídia tocando"></span>
+      <span id="pill-time">--:--</span>
+    </div>
+
+    <!-- Expanded panel -->
+    <div id="panel">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="avatar"><span></span><span></span></div>
+          <div>
+            <div class="brand-name" id="brand-name">Sexta-feira</div>
+            <div class="brand-status" id="brand-date"></div>
+          </div>
+        </div>
+
+        <nav>
+          <button class="nav-item active" data-page="home"><i data-icon="home"></i><span>Início</span></button>
+          <button class="nav-item" data-page="apps"><i data-icon="grid"></i><span>Atalhos</span></button>
+          <button class="nav-item" data-page="pc"><i data-icon="cpu"></i><span>Meu PC</span></button>
+          <button class="nav-item" data-page="settings"><i data-icon="sliders"></i><span>Configurações</span></button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <button class="icon-btn" id="btn-pin" title="Fixar aberto"><i data-icon="pin"></i></button>
+          <span class="hint" id="hotkey-hint"></span>
+          <button class="icon-btn" id="btn-quit" title="Sair"><i data-icon="power"></i></button>
+        </div>
+      </aside>
+
+      <main>
+        <!-- Home -->
+        <section class="page active" id="page-home">
+          <header class="page-head">
+            <h1 id="greeting">Olá!</h1>
+            <p id="subtitle"></p>
+          </header>
+
+          <div class="home-grid">
+            <div class="card cal-card">
+              <div class="cal-head">
+                <div>
+                  <div class="cal-label">Agenda</div>
+                  <div class="cal-date" id="cal-date"></div>
+                </div>
+                <div class="cal-nav">
+                  <button class="pill-btn" id="cal-today">Hoje</button>
+                  <button class="icon-btn sm" id="cal-prev" title="Dia anterior"><i data-icon="chev-left"></i></button>
+                  <button class="icon-btn sm" id="cal-next" title="Próximo dia"><i data-icon="chev-right"></i></button>
+                  <button class="icon-btn sm" id="cal-refresh" title="Atualizar"><i data-icon="reset"></i></button>
+                  <button class="icon-btn sm" id="cal-open" title="Abrir no Google Agenda"><i data-icon="external"></i></button>
+                </div>
+              </div>
+              <div class="cal-allday" id="cal-allday" hidden></div>
+              <div class="cal-body" id="cal-body">
+                <div class="cal-grid" id="cal-grid"></div>
+              </div>
+              <div class="cal-overlay" id="cal-overlay" hidden></div>
+            </div>
+
+            <div class="side-col">
+              <div class="card media-card">
+                <div class="card-head"><span>Mídia</span></div>
+                <div id="media-list"></div>
+                <div class="media-vol">
+                  <button class="icon-btn sm" data-media="volume_menos" data-times="5" title="Volume -"><i data-icon="volume-low"></i></button>
+                  <button class="icon-btn sm" data-media="mudo" title="Mudo"><i data-icon="mute"></i></button>
+                  <button class="icon-btn sm" data-media="volume_mais" data-times="5" title="Volume +"><i data-icon="volume"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Apps -->
+        <section class="page" id="page-apps">
+          <header class="page-head"><h1>Atalhos</h1><p>Clique para abrir · passe o mouse para editar</p></header>
+          <div class="apps-grid" id="apps-grid"></div>
+
+          <!-- Add / edit shortcut -->
+          <div class="modal-backdrop" id="sc-modal" hidden>
+            <div class="modal card">
+              <div class="modal-head">
+                <b id="sc-modal-title">Novo atalho</b>
+                <button class="icon-btn sm" id="sc-close" title="Fechar"><i data-icon="x"></i></button>
+              </div>
+
+              <div class="tabs" id="sc-tabs">
+                <button class="tab active" data-tab="installed">Apps instalados</button>
+                <button class="tab" data-tab="file">Arquivo</button>
+                <button class="tab" data-tab="site">Site</button>
+              </div>
+
+              <div class="tab-panel" data-panel="installed">
+                <div class="input-box"><i data-icon="search"></i><input id="sc-search" placeholder="Buscar app…" autocomplete="off" spellcheck="false"></div>
+                <div class="installed-list" id="sc-installed"></div>
+              </div>
+
+              <div class="tab-panel" data-panel="file" hidden>
+                <p class="muted">Escolha um programa (.exe), atalho (.lnk) ou qualquer arquivo.</p>
+                <button class="pill-btn" id="sc-pick">Escolher arquivo…</button>
+              </div>
+
+              <!-- Site tab and edit mode share this form -->
+              <form class="tab-panel form" data-panel="form" id="sc-form" hidden>
+                <label>Nome<input id="sc-name" autocomplete="off" spellcheck="false" placeholder="Ex: GitHub"></label>
+                <label>Destino<input id="sc-target" autocomplete="off" spellcheck="false" placeholder="https://github.com"></label>
+                <p class="form-error" id="sc-error" hidden></p>
+                <div class="form-actions">
+                  <button type="submit" class="pill-btn accent" id="sc-save">Adicionar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- PC -->
+        <section class="page" id="page-pc">
+          <header class="page-head"><h1>Meu PC</h1><p id="pc-model"></p></header>
+          <div class="pc-grid">
+            <div class="card metric">
+              <span class="muted">CPU</span><b id="pc-cpu">–</b>
+              <div class="bar"><div id="pc-cpu-bar"></div></div>
+            </div>
+            <div class="card metric">
+              <span class="muted">Memória</span><b id="pc-ram">–</b>
+              <div class="bar"><div id="pc-ram-bar"></div></div>
+            </div>
+            <div class="card metric">
+              <span class="muted">Ligado há</span><b id="pc-uptime">–</b>
+            </div>
+          </div>
+        </section>
+
+        <!-- Settings -->
+        <section class="page" id="page-settings">
+          <header class="page-head"><h1>Configurações</h1><p>Salvo em <code>config.json</code></p></header>
+
+          <div class="card setting">
+            <div class="setting-text">
+              <b>Cor de destaque</b>
+              <span class="muted">Usada em botões, ícones ativos e status</span>
+            </div>
+            <div class="swatches" id="swatches">
+              <label class="swatch custom" title="Escolher outra cor">
+                <input type="color" id="accent-custom">
+                <i data-icon="plus"></i>
+              </label>
+            </div>
+          </div>
+
+          <div class="card setting">
+            <div class="setting-text">
+              <b>Atalho de teclado</b>
+              <span class="muted" id="hotkey-help">Abre e fecha o notch, até sobre jogos em tela cheia</span>
+            </div>
+            <button class="hotkey-field" id="hotkey-field" title="Clique e pressione a nova combinação"></button>
+          </div>
+
+          <div class="card setting">
+            <div class="setting-text">
+              <b>Iniciar com o Windows</b>
+              <span class="muted">Abre o notch automaticamente ao ligar o PC</span>
+            </div>
+            <button class="toggle" id="toggle-startup" role="switch" aria-checked="false" title="Iniciar com o Windows"><span></span></button>
+          </div>
+
+          <div class="card setting">
+            <div class="setting-text">
+              <b>Google Agenda</b>
+              <span class="muted" id="google-status">Verificando…</span>
+            </div>
+            <button class="pill-btn" id="google-btn" hidden></button>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

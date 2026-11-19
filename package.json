@@ -1,0 +1,14 @@
+{
+  "name": "notch-hub",
+  "version": "0.1.0",
+  "description": "Central estilo notch para Windows com assistente de IA local (Ollama)",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "start:open": "electron . --open"
+  },
+  "devDependencies": {
+    "electron": "45.3.4"
+  }
+}

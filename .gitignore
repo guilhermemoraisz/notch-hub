@@ -1,0 +1,9 @@
+node_modules/
+out/
+dist/
+
+# Google OAuth client (contains a client secret). See google-client.example.json
+google-client.json
+
+# Personal settings and shortcuts (local paths, your name). See config.example.json
+config.json

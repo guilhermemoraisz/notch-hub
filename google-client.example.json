@@ -1,0 +1,28 @@
+// Google OAuth client for the calendar integration. All values below are FAKE.
+//
+// How to get the real file (free, ~5 minutes):
+//   1. Go to https://console.cloud.google.com and create (or pick) a project.
+//   2. APIs & Services > Library > enable "Google Calendar API".
+//   3. Google Auth Platform > Branding: fill in the app name and your email.
+//   4. Google Auth Platform > Audience: choose "External", then click "Publish app".
+//      (In "Testing" mode the login expires every 7 days.)
+//   5. Google Auth Platform > Clients > Create client > type "Desktop app".
+//   6. Download the JSON and save it next to this file as `google-client.json`.
+//      You can also copy this file and replace the fake values.
+//
+// The first login shows "Google hasn't verified this app": click
+// Advanced > Go to <app name>. That is expected for a personal, unverified app.
+//
+// google-client.json holds a client secret: it is git-ignored, never commit it.
+// Full-line // comments like these are allowed; the app strips them when reading.
+{
+  "installed": {
+    "client_id": "123456789012-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com",
+    "project_id": "my-notch-hub",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "GOCSPX-FakeSecretForExampleOnly000",
+    "redirect_uris": ["http://localhost"]
+  }
+}
