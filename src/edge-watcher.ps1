@@ -160,14 +160,25 @@ namespace NotchHub {
 
     // "fullscreen": an app covers the monitor (game/video). "app": some window is
     // maximized on the primary monitor. "desktop": otherwise. null = keep state.
+    // Screen-capture overlays (PrintScreen) cover the monitor but are not fullscreen apps.
+    static readonly string[] OverlayProcesses = { "SnippingTool", "ScreenClippingHost", "ScreenSketch" };
+
+    static string ProcessName(uint pid) {
+      try { return Process.GetProcessById((int)pid).ProcessName; } catch { return ""; }
+    }
+
     string Classify(IntPtr fg) {
       if (fg != IntPtr.Zero) {
         uint pid;
         GetWindowThreadProcessId(fg, out pid);
-        if (pid == ownerPid) return null;
-        string cls = ClassOf(fg);
-        bool shell = Array.IndexOf(DesktopClasses, cls) >= 0 || Array.IndexOf(ShellClasses, cls) >= 0;
-        if (!shell && !IsIconic(fg) && (ShellSaysFullscreen() || CoversMonitor(fg))) return "fullscreen";
+        // Our own window (notch focused) or a capture overlay: judge by the windows
+        // on screen instead of keeping the old state, so "fullscreen" never sticks.
+        bool ignoreFg = pid == ownerPid || Array.IndexOf(OverlayProcesses, ProcessName(pid)) >= 0;
+        if (!ignoreFg) {
+          string cls = ClassOf(fg);
+          bool shell = Array.IndexOf(DesktopClasses, cls) >= 0 || Array.IndexOf(ShellClasses, cls) >= 0;
+          if (!shell && !IsIconic(fg) && (ShellSaysFullscreen() || CoversMonitor(fg))) return "fullscreen";
+        }
       }
       return AnyMaximizedOnPrimary() ? "app" : "desktop";
     }
