@@ -10,7 +10,10 @@
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --danger: #ff6b6b;
   --now: #ea4335;
-  --anim: 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Open is slower with a soft landing; close is quicker. --anim-close must match ANIMATION_MS in main.js. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --anim-open: 300ms var(--ease);
+  --anim-close: 180ms var(--ease);
 }
 
 * { box-sizing: border-box; }
@@ -51,7 +54,7 @@ i[data-icon] { display: inline-flex; }
   border-top: 0;
   border-radius: 0 0 22px 22px;
   overflow: hidden;
-  transition: width var(--anim), height var(--anim), border-radius var(--anim);
+  transition: width var(--anim-open), height var(--anim-open), border-radius var(--anim-open);
 }
 
 /* Calendar alerts. Blink lengths must match BLINK_MS in main.js; --alert-count comes from settings.
@@ -72,6 +75,7 @@ i[data-icon] { display: inline-flex; }
   width: 210px;
   height: 36px;
   border-radius: 0 0 14px 14px;
+  transition: width var(--anim-close), height var(--anim-close), border-radius var(--anim-close);
 }
 
 #pill {
@@ -87,10 +91,12 @@ i[data-icon] { display: inline-flex; }
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms;
+  will-change: opacity;
+  transition: opacity 80ms;
 }
 
-#notch.collapsed #pill { opacity: 1; pointer-events: auto; transition-delay: 120ms; }
+/* Fade the pill in only once the shell has nearly finished shrinking. */
+#notch.collapsed #pill { opacity: 1; pointer-events: auto; transition: opacity 120ms 110ms; }
 
 #panel {
   position: absolute;
@@ -102,10 +108,18 @@ i[data-icon] { display: inline-flex; }
   display: grid;
   grid-template-columns: 196px 1fr;
   opacity: 1;
-  transition: opacity 180ms 80ms;
+  /* Opacity and transform run on the compositor, so the content never relayouts mid-animation. */
+  transform-origin: top center;
+  will-change: opacity, transform;
+  transition: opacity 220ms 60ms, transform 300ms var(--ease);
 }
 
-#notch.collapsed #panel { opacity: 0; pointer-events: none; transition: opacity 100ms; }
+#notch.collapsed #panel {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(-8px) scale(0.97);
+  transition: opacity 80ms, transform 180ms var(--ease);
+}
 
 /* ---------- Avatar + status dot ---------- */
 
@@ -225,6 +239,10 @@ main {
 
 .page { display: none; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
 .page.active { display: flex; }
+/* Settings outgrows the window; scroll it without a visible bar. */
+#page-settings { overflow-y: auto; scrollbar-width: none; }
+#page-settings::-webkit-scrollbar { display: none; }
+#page-settings > * { flex-shrink: 0; }
 
 .page-head h1 { margin: 0; font-size: 22px; font-weight: 700; }
 .page-head p { margin: 2px 0 0; color: var(--muted); }

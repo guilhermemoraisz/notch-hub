@@ -78,7 +78,8 @@ notch.onState((s) => {
   // 'hidden' = closing to invisible (outside the desktop): fade out, no pill.
   notchEl.classList.toggle('vanish', s === 'hidden');
   notchEl.classList.toggle('collapsed', s === 'collapsed');
-  if (state.expanded) refreshCalendarIfStale();
+  // Wait for the open animation so the re-render does not drop frames.
+  if (state.expanded) setTimeout(refreshCalendarIfStale, 320);
 });
 
 // Calendar alerts: slow yellow blink for a notification, fast red one when the event starts.

@@ -12,8 +12,8 @@ const SIZE = {
   collapsed: { width: 210, height: 36 },
   expanded: { width: 940, height: 580 },
 };
-const COLLAPSE_DELAY_MS = 200; // cursor must stay outside this long before closing
-const ANIMATION_MS = 180; // must match the CSS transition in renderer/styles.css
+const COLLAPSE_DELAY_MS = 80; // cursor must stay outside this long before closing
+const ANIMATION_MS = 180; // must match --anim-close in renderer/styles.css
 const HOVER_POLL_MS = 40;
 const REVEAL_DELAY_MS = 40; // lets the renderer start the grow animation before showing
 const REVEAL_ZONE_WIDTH = 280; // DIP, centered on the notch, where pushing up reveals it
@@ -223,7 +223,7 @@ function cursorInsideWindow() {
  */
 function watchHover() {
   setInterval(() => {
-    if (!win || notchState !== 'expanded' || pinned) return;
+    if (!win || win.isDestroyed() || notchState !== 'expanded' || pinned) return;
     if (cursorInsideWindow()) {
       armed = true;
       outsideSince = null;
@@ -265,6 +265,9 @@ function createWindow() {
     win.showInactive();
     if (process.argv.includes('--open')) expand({ arm: false });
   });
+
+  // Timers outlive the window during quit; null it so their guards bail out.
+  win.on('closed', () => { win = null; });
 
   win.on('blur', () => {
     if (notchState === 'expanded' && !pinned && !cursorInsideWindow()) collapse();
