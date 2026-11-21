@@ -1,5 +1,4 @@
-// Calendar alerts: fires 'reminder' when a Google notification is due and
-// 'start' a configurable number of minutes before an event begins (0 = at start time).
+// Calendar alerts: fires 'reminder' when a Google notification is due and 'start' when an event begins.
 const google = require('./google');
 
 // Short enough that an event created a minute ago still gets its alerts.
@@ -9,8 +8,8 @@ const LOOKAHEAD_MS = 24 * 60 * 60 * 1000;
 // An alert missed by more than this (sleep, app closed) is dropped, not fired late.
 const GRACE_MS = 60 * 1000;
 
-/** `startLeadMinutes()`: read on every tick so a settings change applies at once. */
-function startAlerts({ onAlert, startLeadMinutes = () => 0 }) {
+/** `onOngoing(ev)`: on every tick, the timed event in progress that ends first, if any. */
+function startAlerts({ onAlert, onOngoing }) {
   let events = [];
   const fired = new Set();
 
@@ -29,7 +28,7 @@ function startAlerts({ onAlert, startLeadMinutes = () => 0 }) {
     for (const ev of events) {
       if (ev.allDay) continue;
       const start = Date.parse(ev.start);
-      const due = [...(ev.reminders ?? []).map((m) => ({ kind: 'reminder', at: start - m * 60 * 1000 })), { kind: 'start', at: start - startLeadMinutes() * 60 * 1000 }];
+      const due = [...(ev.reminders ?? []).map((m) => ({ kind: 'reminder', at: start - m * 60 * 1000 })), { kind: 'start', at: start }];
       for (const { kind, at } of due) {
         const key = `${ev.id}|${kind}|${at}`;
         if (now < at || fired.has(key)) continue;
@@ -37,6 +36,10 @@ function startAlerts({ onAlert, startLeadMinutes = () => 0 }) {
         if (now - at <= GRACE_MS) onAlert(kind, ev);
       }
     }
+    const ongoing = events
+      .filter((ev) => !ev.allDay && Date.parse(ev.start) <= now && now < Date.parse(ev.end))
+      .sort((a, b) => Date.parse(a.end) - Date.parse(b.end))[0];
+    if (ongoing) onOngoing?.(ongoing);
   }
 
   fetchEvents().then(tick);

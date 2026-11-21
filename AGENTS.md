@@ -35,7 +35,7 @@ Guidelines for AI agents and contributors working on Notch Hub.
 
 - Hide the notch through opacity and click-through, never `hide()`/`show()`, to avoid Windows window animations.
 - The window bounds clip outer shadows. Use `inset` box-shadows for effects on the notch.
-- Fullscreen apps never show the notch or its alerts, except through the global hotkey.
+- Fullscreen apps never show the notch, except through the global hotkey and calendar alerts (when `alerts.overFullscreen` is on). Alerts never take keyboard focus.
 
 ## Testing
 

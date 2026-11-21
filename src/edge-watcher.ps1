@@ -2,6 +2,7 @@
 #   push <dy> <dx>   raw upward mouse movement while the cursor sits on the
 #                    top edge of a monitor (dy > 0 means "pushing up")
 #   fg desktop|app|fullscreen   the foreground window changed (fullscreen = game/video covering the monitor)
+#   dnd on|off       Windows Do Not Disturb (Focus) changed
 #   error <message>
 # Exits on its own when the owner (Electron) process is gone.
 param([Parameter(Mandatory = $true)][int]$OwnerPid)
@@ -62,6 +63,22 @@ namespace NotchHub {
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
     [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int state);
+    [DllImport("ntdll.dll")] static extern int NtQueryWnfStateData(ref ulong name, IntPtr typeId, IntPtr scope, out uint stamp, IntPtr buffer, ref uint size);
+
+    // No public API exposes Do Not Disturb. This undocumented WNF state holds the active
+    // quiet-hours profile (0 = off). null = unreadable on this Windows build.
+    const ulong WNF_SHEL_QUIETHOURS_ACTIVE_PROFILE_CHANGED = 0x0D83063EA3BF1C75UL;
+    static bool? ReadDnd() {
+      ulong name = WNF_SHEL_QUIETHOURS_ACTIVE_PROFILE_CHANGED;
+      uint stamp, size = 4;
+      IntPtr buffer = Marshal.AllocHGlobal(4);
+      try {
+        if (NtQueryWnfStateData(ref name, IntPtr.Zero, IntPtr.Zero, out stamp, buffer, ref size) != 0 || size < 4) return null;
+        return Marshal.ReadInt32(buffer) != 0;
+      } finally {
+        Marshal.FreeHGlobal(buffer);
+      }
+    }
 
     // QUNS_BUSY (fullscreen app), QUNS_RUNNING_D3D_FULL_SCREEN (exclusive game), QUNS_PRESENTATION_MODE
     static bool ShellSaysFullscreen() {
@@ -94,6 +111,7 @@ namespace NotchHub {
     readonly Timer timer = new Timer();
     readonly uint headerSize = (uint)Marshal.SizeOf(typeof(RAWINPUTHEADER));
     string state = "";
+    bool? dnd = null;
 
     public EdgeWatcher(uint ownerPid) {
       this.ownerPid = ownerPid;
@@ -108,9 +126,10 @@ namespace NotchHub {
 
       // Polling catches cases without a foreground event (e.g. last window minimized).
       timer.Interval = 500;
-      timer.Tick += (s, e) => { ExitIfOwnerGone(); ReportForeground(); };
+      timer.Tick += (s, e) => { ExitIfOwnerGone(); ReportForeground(); ReportDnd(); };
       timer.Start();
       ReportForeground();
+      ReportDnd();
     }
 
     static void Emit(string line) {
@@ -181,6 +200,13 @@ namespace NotchHub {
         }
       }
       return AnyMaximizedOnPrimary() ? "app" : "desktop";
+    }
+
+    void ReportDnd() {
+      bool? next = ReadDnd();
+      if (next == null || next == dnd) return;
+      dnd = next;
+      Emit("dnd " + (next.Value ? "on" : "off"));
     }
 
     void ReportForeground() {

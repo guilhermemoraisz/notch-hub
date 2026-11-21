@@ -48,4 +48,9 @@ contextBridge.exposeInMainWorld('notch', {
 
   onState: listen('notch:state'),
   onAlert: listen('notch:alert'),
+  onCountdown: listen('notch:countdown'),
+  alertHover: send('alert:hover'),
+  alertDismiss: send('alert:dismiss'),
+  alertSnooze: send('alert:snooze'),
+  alertOpen: send('alert:open'),
 });

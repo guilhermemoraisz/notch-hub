@@ -12,8 +12,13 @@
     <div id="pill">
       <div class="avatar sm"><span></span><span></span></div>
       <span class="dot" id="pill-dot" title="Mídia tocando"></span>
+      <span id="pill-countdown"><span class="alert-dot"></span><b id="pill-cd-title"></b><span id="pill-cd-when"></span></span>
       <span id="pill-time">--:--</span>
     </div>
+
+    <!-- Calendar alert (content built in renderer.js) -->
+    <div id="alert"></div>
+    <div id="alert-timer"><i></i></div>
 
     <!-- Expanded panel -->
     <div id="panel">
@@ -180,36 +185,58 @@
           <div class="card setting setting-col">
             <div class="setting-text">
               <b>Alertas da agenda</b>
-              <span class="muted">O notch pisca nas notificações e no início de cada evento</span>
+              <span class="muted">O notch cresce e mostra o evento nas notificações e quando ele começa</span>
             </div>
             <div class="alert-row" id="alert-row-reminder">
-              <span class="alert-dot yellow"></span>
-              <div class="alert-label"><b>Notificação</b><span class="muted">Pisca em amarelo</span></div>
+              <div class="alert-label"><b>Notificação</b><span class="muted">Nos lembretes do Google</span></div>
               <div class="alert-fields">
-                <div class="stepper" data-key="reminderBlinks" data-min="1" data-max="10" title="Quantas vezes pisca">
-                  <button type="button" data-step="-1" aria-label="Diminuir">−</button>
-                  <span class="stepper-value"></span><span class="stepper-unit">piscadas</span>
-                  <button type="button" data-step="1" aria-label="Aumentar">+</button>
+                <div class="seg" data-seg="reminderDismiss" title="Quando o aviso some">
+                  <button type="button" data-value="hover">Ao interagir</button>
+                  <button type="button" data-value="timer">Após tempo</button>
                 </div>
-              </div>
-              <button class="toggle" data-toggle="reminderEnabled" role="switch" aria-checked="true" title="Alerta amarelo"><span></span></button>
-            </div>
-            <div class="alert-row" id="alert-row-start">
-              <span class="alert-dot red"></span>
-              <div class="alert-label"><b>Início do evento</b><span class="muted">Pisca rápido em vermelho</span></div>
-              <div class="alert-fields">
-                <div class="stepper" data-key="startSeconds" data-min="1" data-max="60" title="Quanto tempo pisca">
+                <div class="stepper" id="reminder-seconds" data-key="reminderSeconds" data-min="3" data-max="60" title="Quanto tempo o aviso fica na tela">
                   <button type="button" data-step="-1" aria-label="Diminuir">−</button>
                   <span class="stepper-value"></span><span class="stepper-unit">seg</span>
                   <button type="button" data-step="1" aria-label="Aumentar">+</button>
                 </div>
-                <div class="stepper" data-key="startLeadMinutes" data-min="0" data-max="60" title="Quanto tempo antes do evento (0 = na hora)">
+              </div>
+              <button class="toggle" data-toggle="reminderEnabled" role="switch" aria-checked="true" title="Notificação"><span></span></button>
+            </div>
+            <div class="alert-row" id="alert-row-start">
+              <div class="alert-label"><b>Início do evento</b><span class="muted">Na hora em que o evento começa</span></div>
+              <div class="alert-fields">
+                <div class="seg" data-seg="startDismiss" title="Quando o aviso some">
+                  <button type="button" data-value="hover">Ao interagir</button>
+                  <button type="button" data-value="timer">Após tempo</button>
+                </div>
+                <div class="stepper" id="start-seconds" data-key="startSeconds" data-min="3" data-max="60" title="Quanto tempo o aviso fica na tela">
                   <button type="button" data-step="-1" aria-label="Diminuir">−</button>
-                  <span class="stepper-value"></span><span class="stepper-unit">min antes</span>
+                  <span class="stepper-value"></span><span class="stepper-unit">seg</span>
                   <button type="button" data-step="1" aria-label="Aumentar">+</button>
                 </div>
               </div>
-              <button class="toggle" data-toggle="startEnabled" role="switch" aria-checked="true" title="Alerta vermelho"><span></span></button>
+              <button class="toggle" data-toggle="startEnabled" role="switch" aria-checked="true" title="Início do evento"><span></span></button>
+            </div>
+            <span class="alert-group">Geral</span>
+            <div class="alert-row">
+              <div class="alert-label"><b>Mostrar sobre tela cheia</b><span class="muted">Vídeos, jogos e apresentações. Não tira o foco do app</span></div>
+              <button class="toggle" data-toggle="overFullscreen" role="switch" aria-checked="true" title="Mostrar sobre tela cheia"><span></span></button>
+            </div>
+            <div class="alert-row">
+              <div class="alert-label"><b>No Não perturbe</b><span class="muted">O que aparece com o Não perturbe do Windows ligado</span></div>
+              <div class="seg" data-seg="dnd" title="Avisos durante o Não perturbe">
+                <button type="button" data-value="all">Tudo</button>
+                <button type="button" data-value="start">Só início</button>
+                <button type="button" data-value="none">Nada</button>
+              </div>
+            </div>
+            <div class="alert-row">
+              <div class="alert-label"><b>Pulso ao chegar</b><span class="muted">Um brilho na cor do evento quando o aviso abre</span></div>
+              <button class="toggle" data-toggle="pulse" role="switch" aria-checked="true" title="Pulso ao chegar"><span></span></button>
+            </div>
+            <div class="alert-row">
+              <div class="alert-label"><b>Contagem na pílula</b><span class="muted">Depois do aviso, mostra quanto falta para o evento</span></div>
+              <button class="toggle" data-toggle="countdown" role="switch" aria-checked="true" title="Contagem na pílula"><span></span></button>
             </div>
           </div>
 

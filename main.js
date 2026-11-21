@@ -8,8 +8,11 @@ const { startAlerts } = require('./src/alerts');
 const { startEdgeWatcher } = require('./src/edge');
 const { startMediaWatcher } = require('./src/media');
 
+// Must match renderer/styles.css. `alert` fits the largest alert shape: the card with its hover actions.
 const SIZE = {
   collapsed: { width: 210, height: 36 },
+  countdown: { width: 300, height: 36 },
+  alert: { width: 480, height: 140 },
   expanded: { width: 940, height: 580 },
 };
 const COLLAPSE_DELAY_MS = 80; // cursor must stay outside this long before closing
@@ -60,31 +63,175 @@ let pushTotal = 0;
 let lastPushAt = 0;
 let stopEdgeWatcher = null;
 
-let alerts = null;
-let alertTimer = null;
-const BLINK_MS = { reminder: 1400, start: 400 }; // must match the CSS animations
-const ALERT_LIMITS = { reminderBlinks: [1, 10], startSeconds: [1, 60], startLeadMinutes: [0, 60] };
+// Windows Do Not Disturb, reported by the edge helper.
+let dnd = false;
 
-/** Blink the notch; when hidden, show the pill just for the blink. Never over fullscreen. */
-function flashAlert(kind) {
-  const { reminderEnabled, startEnabled, reminderBlinks, startSeconds } = config.alerts;
-  if (fullscreen || !(kind === 'reminder' ? reminderEnabled : startEnabled)) return;
-  const durationMs = kind === 'reminder' ? reminderBlinks * BLINK_MS.reminder : startSeconds * 1000;
-  clearTimeout(alertTimer);
-  if (concealed && notchState === 'collapsed') reveal();
-  send('notch:alert', kind, Math.round(durationMs / BLINK_MS[kind]));
-  alertTimer = setTimeout(() => {
-    alertTimer = null;
-    applyVisibility();
-  }, durationMs);
+/*
+ * Calendar alerts: the notch grows to show the event. While an alert is up (and while it
+ * morphs back) the window has the largest alert size and is click-through except over the
+ * visible shape, which the renderer reports through 'alert:hover'.
+ */
+let alerts = null;
+let alert = null; // { kind, event, shownAt, timer, deadline, remaining, hoverSince }
+let alertWindow = false;
+let alertSettleTimer = null;
+// A notification that arrived while an event start was showing; shown once that one is dismissed.
+let pendingReminder = null;
+let countdown = null; // the event the pill counts down to, plus its expiry timer
+const ALERT_LIMITS = { reminderSeconds: [3, 60], startSeconds: [3, 60] };
+const ALERT_FLAGS = ['reminderEnabled', 'startEnabled', 'overFullscreen', 'pulse', 'countdown'];
+const ALERT_CHOICES = { reminderDismiss: ['hover', 'timer'], startDismiss: ['hover', 'timer'], dnd: ['all', 'start', 'none'] };
+// A hover counts as "seen" only after the alert is up for a moment and the cursor stays a bit,
+// so a cursor passing by on its way to the browser tabs does not dismiss it.
+const ALERT_ARM_MS = 500;
+const ALERT_DWELL_MS = 250;
+const ALERT_GROW_MS = 450; // the timer starts once the shape has grown
+const ALERT_MORPH_MS = 480; // must cover the CSS shrink (height, then width)
+const ALERT_HIDE_MS = 280; // must be shorter than the renderer's slide-up reset
+const SNOOZE_MS = 5 * 60 * 1000;
+
+const collapsedSize = () => (countdown ? 'countdown' : 'collapsed');
+const currentSize = () => (notchState === 'expanded' ? 'expanded' : alertWindow ? 'alert' : collapsedSize());
+const willHide = () => fullscreen || (!onDesktop && config.hideOutsideDesktop);
+
+function alertAllowed(kind) {
+  const a = config.alerts;
+  if (!(kind === 'reminder' ? a.reminderEnabled : a.startEnabled)) return false;
+  if (fullscreen && !a.overFullscreen) return false;
+  if (dnd && (a.dnd === 'none' || (a.dnd === 'start' && kind === 'reminder'))) return false;
+  return true;
 }
 
-/** Stop a running blink (the user came to the notch, so it did its job). */
-function cancelAlert() {
-  if (!alertTimer) return;
-  clearTimeout(alertTimer);
-  alertTimer = null;
-  send('notch:alert', null);
+/** null = stays until the user interacts. */
+function alertTimerMs() {
+  const a = config.alerts;
+  if (alert.kind === 'reminder') return a.reminderDismiss === 'timer' ? a.reminderSeconds * 1000 : null;
+  return a.startDismiss === 'timer' ? a.startSeconds * 1000 : null;
+}
+
+function runAlertTimer(ms) {
+  clearTimeout(alert.timer);
+  alert.timer = null;
+  alert.deadline = null;
+  if (!ms) return;
+  alert.deadline = Date.now() + ms;
+  alert.timer = setTimeout(() => dismissAlert(), ms);
+}
+
+function sendAlert(arrive = false) {
+  const timerMs = alertTimerMs();
+  send('notch:alert', { kind: alert.kind, event: alert.event, pulse: config.alerts.pulse, timerMs, arrive });
+  const ms = timerMs && timerMs + ALERT_GROW_MS;
+  // A replacement arriving while hovered restarts the time, but stays paused until the cursor leaves.
+  if (alert.hoverSince) alert.remaining = ms;
+  else runAlertTimer(ms);
+}
+
+const alertEntry = (kind, ev) => ({ id: ev.id, kind, title: ev.title, start: ev.start, end: ev.end, color: ev.color, link: ev.link ?? null, meet: ev.meet ?? null });
+
+function showAlert(kind, ev) {
+  if (!win || !alertAllowed(kind)) return;
+  const entry = alertEntry(kind, ev);
+  // The open panel already shows the calendar: only leave the countdown for later.
+  if (notchState !== 'collapsed') {
+    setCountdown(entry);
+    return;
+  }
+  // Priority: a newer notification replaces an older one, an event start replaces notifications.
+  // A notification never replaces a start: it waits until the start is dismissed.
+  if (alert) {
+    if (alert.event.id === entry.id && alert.kind === kind) return;
+    if (alert.kind === 'start' && kind === 'reminder') {
+      pendingReminder = entry;
+      return;
+    }
+    Object.assign(alert, { kind, event: entry, shownAt: Date.now() });
+    sendAlert();
+    return;
+  }
+  clearTimeout(alertSettleTimer);
+  alert = { kind, event: entry, shownAt: Date.now(), timer: null, deadline: null, remaining: null, hoverSince: null };
+  const wasHidden = concealed;
+  win.setBounds(boundsFor('alert'));
+  alertWindow = true;
+  win.setIgnoreMouseEvents(true, { forward: true });
+  sendAlert(wasHidden);
+  if (!wasHidden) return;
+  // Show the window once the renderer has placed the notch above the screen, so it slides in.
+  setTimeout(() => {
+    if (!alert || !win) return;
+    reveal();
+    win.setIgnoreMouseEvents(true, { forward: true });
+  }, REVEAL_DELAY_MS);
+}
+
+/** `toPanel`: the panel opens right away, so no countdown morph or hiding. */
+function dismissAlert({ toPanel = false } = {}) {
+  if (!alert) return;
+  clearTimeout(alert.timer);
+  const { event } = alert;
+  alert = null;
+  setCountdown(event, { silent: true });
+  // Opening the panel shows the calendar, which covers the waiting notification too.
+  const next = !toPanel && pendingReminder && Date.parse(pendingReminder.start) > Date.now() ? pendingReminder : null;
+  pendingReminder = null;
+  const hide = !toPanel && willHide();
+  // One message: the renderer morphs the alert straight into the countdown pill.
+  send('notch:alert', null, { countdown: countdownInfo(), hide });
+  if (toPanel) return;
+  clearTimeout(alertSettleTimer);
+  alertSettleTimer = setTimeout(() => {
+    alertSettleTimer = null;
+    if (!win || alert || notchState !== 'collapsed') return;
+    if (hide) conceal();
+    alertWindow = false;
+    win.setBounds(boundsFor(collapsedSize()));
+    if (!hide) win.setIgnoreMouseEvents(false);
+    applyVisibility();
+    if (next) showAlert('reminder', next);
+  }, hide ? ALERT_HIDE_MS : ALERT_MORPH_MS);
+}
+
+function onAlertHover(inside) {
+  if (!win) return;
+  // Only the visible shape takes the mouse; the rest of the alert-sized window stays click-through.
+  if (alertWindow && !concealed) win.setIgnoreMouseEvents(!inside, { forward: true });
+  if (!alert) return;
+  if (inside) {
+    alert.hoverSince = Date.now();
+    // Hovering pauses the timer (the renderer pauses its bar).
+    alert.remaining = alert.deadline ? alert.deadline - Date.now() : null;
+    runAlertTimer(null);
+    return;
+  }
+  const since = alert.hoverSince;
+  alert.hoverSince = null;
+  if (since && Date.now() - Math.max(since, alert.shownAt + ALERT_ARM_MS) >= ALERT_DWELL_MS) dismissAlert();
+  else if (alert.remaining) runAlertTimer(alert.remaining); // passing by: resume
+}
+
+function snoozeAlert(id) {
+  const ev = alert?.kind === 'reminder' && alert.event.id === id ? alert.event : null;
+  dismissAlert();
+  if (ev) setTimeout(() => showAlert('reminder', ev), SNOOZE_MS);
+}
+
+const countdownInfo = () => (countdown ? { ...countdown, timer: undefined } : null);
+
+/** After a reminder: until the event starts. After a start (or while an event is on): until it ends. */
+function setCountdown(ev, { silent = false } = {}) {
+  clearTimeout(countdown?.timer);
+  countdown = null;
+  if (ev && config.alerts.countdown) {
+    const until = Date.parse(ev.kind === 'start' ? ev.end : ev.start);
+    if (until > Date.now()) countdown = { ...ev, timer: setTimeout(() => setCountdown(null), until - Date.now()) };
+  }
+  if (silent) return;
+  send('notch:countdown', countdownInfo());
+  // Grow the window before the pill grows; shrink it only after the pill has shrunk.
+  if (notchState !== 'collapsed' || alertWindow) return;
+  if (countdown) win?.setBounds(boundsFor('countdown'));
+  else setTimeout(() => notchState === 'collapsed' && !alertWindow && win?.setBounds(boundsFor(collapsedSize())), ALERT_MORPH_MS);
 }
 
 let mediaWatcher = null;
@@ -101,8 +248,11 @@ function boundsFor(kind) {
 /** `force`: open even over a fullscreen app (only the hotkey does this). */
 function expand({ focus = false, arm = true, force = false } = {}) {
   if (fullscreen && !force) return;
-  cancelAlert();
+  dismissAlert({ toPanel: true });
   clearTimeout(collapseTimer);
+  clearTimeout(alertSettleTimer);
+  if (alertWindow && !concealed) win.setIgnoreMouseEvents(false);
+  alertWindow = false;
   const wasHidden = concealed;
   if (notchState !== 'expanded') {
     win.setBounds(boundsFor('expanded'));
@@ -128,18 +278,18 @@ function expand({ focus = false, arm = true, force = false } = {}) {
 function collapse() {
   if (notchState !== 'expanded') return;
   // Outside the desktop the pill is never shown: fade the panel out instead.
-  const willHide = fullscreen || (!onDesktop && config.hideOutsideDesktop);
+  const hide = willHide();
   notchState = 'collapsing';
-  send('notch:state', willHide ? 'hidden' : 'collapsed');
+  send('notch:state', hide ? 'hidden' : 'collapsed');
   // Drop keyboard focus so typing does not go into the hidden panel.
   if (win.isFocused()) win.blur();
   // Let the CSS animation finish before shrinking the real window.
   collapseTimer = setTimeout(() => {
     if (notchState !== 'collapsing') return;
-    if (willHide) conceal();
-    win.setBounds(boundsFor('collapsed'));
+    if (hide) conceal();
+    win.setBounds(boundsFor(collapsedSize()));
     notchState = 'collapsed';
-    if (willHide) send('notch:state', 'collapsed');
+    if (hide) send('notch:state', 'collapsed');
     applyVisibility();
   }, ANIMATION_MS);
 }
@@ -148,19 +298,22 @@ function collapse() {
 function applyVisibility() {
   if (!win) return;
   if (fullscreen) {
+    // An alert shown over the fullscreen app stays until dismissed.
+    if (alertWindow) return;
     // Close instantly, no animation.
     clearTimeout(collapseTimer);
     if (notchState !== 'collapsed') {
-      win.setBounds(boundsFor('collapsed'));
+      win.setBounds(boundsFor(collapsedSize()));
       notchState = 'collapsed';
       send('notch:state', 'collapsed');
     }
     conceal();
     return;
   }
+  if (alertWindow) return; // the alert manages visibility until it settles
   if (onDesktop || !config.hideOutsideDesktop) {
     if (concealed) reveal();
-  } else if (notchState === 'collapsed' && !concealed && !alertTimer) {
+  } else if (notchState === 'collapsed' && !concealed) {
     conceal();
   }
 }
@@ -200,12 +353,16 @@ function startEdge() {
       fullscreen = kind === 'fullscreen';
       applyVisibility();
     },
+    onDnd: (on) => {
+      dnd = on;
+    },
     onExit: (err) => {
       // Without the helper there is no way to reveal the notch: keep it visible.
       console.error(`[edge] ${err.message}`);
       stopEdgeWatcher = null;
       onDesktop = true;
       fullscreen = false;
+      dnd = false;
       applyVisibility();
     },
   });
@@ -274,14 +431,20 @@ function createWindow() {
   });
 
   // Keep the notch centered when monitors or resolution change.
-  const recenter = () => win.setBounds(boundsFor(notchState === 'expanded' ? 'expanded' : 'collapsed'));
+  const recenter = () => win.setBounds(boundsFor(currentSize()));
   screen.on('display-metrics-changed', recenter);
   screen.on('display-added', recenter);
   screen.on('display-removed', recenter);
 }
 
 function registerIpc() {
-  ipcMain.on('notch:hover', () => expand());
+  // While an alert is up, hovering shows its actions instead of opening the panel.
+  ipcMain.on('notch:hover', () => !alert && expand());
+  ipcMain.on('alert:hover', (_e, inside) => onAlertHover(Boolean(inside)));
+  ipcMain.on('alert:dismiss', () => dismissAlert());
+  ipcMain.on('alert:snooze', (_e, id) => snoozeAlert(String(id)));
+  // A click is explicit: open the panel even over a fullscreen app.
+  ipcMain.on('alert:open', () => alert && expand({ force: true }));
   ipcMain.on('notch:collapse', () => collapse());
   ipcMain.handle('notch:pin', (_e, value) => (pinned = Boolean(value)));
   ipcMain.on('app:quit', () => app.quit());
@@ -304,13 +467,17 @@ function registerIpc() {
     }
     if (typeof patch?.startWithWindows === 'boolean') clean.startWithWindows = patch.startWithWindows;
     if (patch?.alerts && typeof patch.alerts === 'object') {
+      const input = patch.alerts;
       const next = { ...config.alerts };
-      for (const key of ['reminderEnabled', 'startEnabled']) {
-        if (typeof patch.alerts[key] === 'boolean') next[key] = patch.alerts[key];
+      for (const key of ALERT_FLAGS) {
+        if (typeof input[key] === 'boolean') next[key] = input[key];
       }
       for (const [key, [min, max]] of Object.entries(ALERT_LIMITS)) {
-        const n = Math.round(Number(patch.alerts[key]));
-        if (key in patch.alerts && Number.isFinite(n)) next[key] = Math.min(max, Math.max(min, n));
+        const n = Math.round(Number(input[key]));
+        if (key in input && Number.isFinite(n)) next[key] = Math.min(max, Math.max(min, n));
+      }
+      for (const [key, options] of Object.entries(ALERT_CHOICES)) {
+        if (options.includes(input[key])) next[key] = input[key];
       }
       clean.alerts = next;
     }
@@ -325,6 +492,7 @@ function registerIpc() {
     saveConfig(__dirname, clean);
     Object.assign(config, clean);
     if ('startWithWindows' in clean) applyStartup();
+    if (clean.alerts && !clean.alerts.countdown && countdown) setCountdown(null);
     return clean;
   });
 
@@ -439,7 +607,13 @@ if (!app.requestSingleInstanceLock()) {
     applyStartup();
     watchHover();
     startEdge();
-    alerts = startAlerts({ onAlert: (kind) => flashAlert(kind), startLeadMinutes: () => config.alerts.startLeadMinutes });
+    alerts = startAlerts({
+      onAlert: showAlert,
+      // An event in progress keeps its countdown, even after a restart or when its start alert was off.
+      onOngoing: (ev) => {
+        if (!countdown && !alert && config.alerts.countdown) setCountdown(alertEntry('start', ev));
+      },
+    });
     mediaWatcher = startMediaWatcher({
       onSessions: (sessions) => {
         mediaSessions = sessions;

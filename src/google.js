@@ -289,6 +289,7 @@ async function listEvents(timeMin, timeMax) {
             allDay: !e.start.dateTime,
             color: EVENT_COLORS[e.colorId] ?? cal.backgroundColor ?? '#039be5',
             link: e.htmlLink,
+            meet: e.hangoutLink ?? e.conferenceData?.entryPoints?.find((p) => p.entryPointType === 'video')?.uri ?? null,
             reminders: popupMinutes(e, cal),
           }));
       }),

@@ -10,10 +10,11 @@ const SCRIPT = path.join(__dirname, 'edge-watcher.ps1').replace('app.asar', 'app
  * Callbacks:
  *   onPush(dy, dx)        raw upward movement while the cursor is on a top edge
  *   onForeground(kind)    'desktop' | 'app' | 'fullscreen'
+ *   onDnd(on)             Windows Do Not Disturb turned on or off
  *   onExit(error)         helper died; caller should fall back to always-visible
  * Returns a function that stops the helper.
  */
-function startEdgeWatcher({ onPush, onForeground, onExit }) {
+function startEdgeWatcher({ onPush, onForeground, onDnd, onExit }) {
   const proc = spawn(
     'powershell.exe',
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-OwnerPid', String(process.pid)],
@@ -24,6 +25,7 @@ function startEdgeWatcher({ onPush, onForeground, onExit }) {
     const [kind, a, b] = line.trim().split(' ');
     if (kind === 'push') onPush(Number(a), Number(b));
     else if (kind === 'fg') onForeground(a);
+    else if (kind === 'dnd') onDnd?.(a === 'on');
     else if (kind === 'error') console.error(`[edge] ${line}`);
   });
 

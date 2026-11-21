@@ -11,8 +11,19 @@ const DEFAULTS = {
   hideOutsideDesktop: true,
   // How hard to push (raw mouse counts). Higher = needs a stronger push.
   revealPush: 60,
-  // Calendar alerts: yellow blinks on each Google notification, red blink before the event starts.
-  alerts: { reminderEnabled: true, startEnabled: true, reminderBlinks: 2, startSeconds: 10, startLeadMinutes: 0 },
+  // Calendar alerts: the notch grows to show the event on each Google notification and at its start.
+  alerts: {
+    reminderEnabled: true,
+    reminderDismiss: 'hover', // like startDismiss, with reminderSeconds
+    reminderSeconds: 8,
+    startEnabled: true,
+    startDismiss: 'hover', // 'hover' = stays until the user hovers and leaves; 'timer' = startSeconds
+    startSeconds: 10,
+    overFullscreen: true,
+    dnd: 'start', // during Windows Do Not Disturb: 'all' | 'start' | 'none'
+    pulse: true,
+    countdown: true,
+  },
   apps: {},
 };
 
@@ -38,8 +49,9 @@ function loadConfig(dir) {
     // Fresh clone: start from the example (config.json is git-ignored).
     else user = readExample(dir);
   }
-  // Legacy single `enabled` switch becomes the two per-alert switches.
-  const { enabled, ...userAlerts } = user.alerts ?? {};
+  // Legacy single `enabled` switch becomes the two per-alert switches. Blink count and
+  // start lead time have no equivalent in the current alerts: drop them.
+  const { enabled, reminderBlinks, startLeadMinutes, ...userAlerts } = user.alerts ?? {};
   const legacy = typeof enabled === 'boolean' ? { reminderEnabled: enabled, startEnabled: enabled } : {};
   return { ...DEFAULTS, ...user, alerts: { ...DEFAULTS.alerts, ...legacy, ...userAlerts }, apps: { ...(user.apps ?? DEFAULTS.apps) } };
 }

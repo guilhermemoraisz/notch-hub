@@ -6,7 +6,18 @@
   "hideOutsideDesktop": true,
   "revealPush": 60,
   "accentColor": "#7ed957",
-  "alerts": { "reminderEnabled": true, "startEnabled": true, "reminderBlinks": 2, "startSeconds": 10, "startLeadMinutes": 0 },
+  "alerts": {
+    "reminderEnabled": true,
+    "reminderDismiss": "hover",
+    "reminderSeconds": 8,
+    "startEnabled": true,
+    "startDismiss": "hover",
+    "startSeconds": 10,
+    "overFullscreen": true,
+    "dnd": "start",
+    "pulse": true,
+    "countdown": true
+  },
   "apps": {
     "spotify": "spotify:",
     "youtube": "https://www.youtube.com",

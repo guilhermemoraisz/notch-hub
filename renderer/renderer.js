@@ -69,7 +69,18 @@ const state = {
 const notchEl = $('#notch');
 
 notchEl.addEventListener('mouseenter', () => {
+  // Main uses this to make only the visible alert shape catch the mouse.
+  notch.alertHover(true);
+  if (alertState) {
+    notchEl.classList.add('hover');
+    notchEl.classList.remove('pulse');
+    return;
+  }
   if (!state.expanded) notch.hover();
+});
+notchEl.addEventListener('mouseleave', () => {
+  notch.alertHover(false);
+  notchEl.classList.remove('hover');
 });
 $('#pill').addEventListener('click', () => notch.hover());
 
@@ -82,17 +93,173 @@ notch.onState((s) => {
   if (state.expanded) setTimeout(refreshCalendarIfStale, 320);
 });
 
-// Calendar alerts: slow yellow blink for a notification, fast red one when the event starts.
-notch.onAlert((kind, blinks) => {
-  notchEl.classList.remove('alert-reminder', 'alert-start');
-  if (!kind) return; // alert cancelled
-  notchEl.style.setProperty('--alert-count', String(blinks));
+// ---------- Calendar alerts ----------
+// The notch grows into a wide pill (notification) or a card (event start). Hover reveals actions;
+// main decides when it is dismissed or replaced. Shapes must fit SIZE.alert / SIZE.countdown in main.js.
+
+const ALERT_SHAPE = ['alerting', 'alert-pill', 'alert-card', 'hover', 'shown', 'timed', 'pulse', 'arriving', 'sliding', 'departing', 'swapping'];
+let alertState = null;
+let alertTimers = [];
+const later = (ms, fn) => alertTimers.push(setTimeout(fn, ms));
+
+const minutesUntil = (iso) => Math.ceil((Date.parse(iso) - Date.now()) / 60_000);
+const minutesSince = (iso) => Math.floor((Date.now() - Date.parse(iso)) / 60_000);
+const eventRange = (ev) => `${fmtTime(new Date(ev.start))} – ${fmtTime(new Date(ev.end))}`;
+
+/** Labels that age while the alert waits for the user (refreshed with the clock). */
+function alertLabels(ev) {
+  const since = minutesSince(ev.start);
+  if (since >= 0) {
+    const ago = since < 1 ? 'agora' : `há ${since} min`;
+    return { chip: since < 1 ? 'começou' : `começou ${ago}`, lead: since < 1 ? 'Começou agora' : `Começou ${ago}`, count: ago };
+  }
+  const m = minutesUntil(ev.start);
+  return { chip: `em ${m} min`, lead: `Em ${m} min`, count: `${m} min` };
+}
+
+function renderAlertLabels() {
+  if (!alertState) return;
+  const labels = alertLabels(alertState.event);
+  for (const node of $$('[data-label]', $('#alert'))) node.textContent = labels[node.dataset.label];
+}
+
+function labelNode(tag, className, key) {
+  const node = el(tag, className);
+  node.dataset.label = key;
+  return node;
+}
+
+function openFromAlert(url) {
+  notch.openSite(withAccount(url));
+  notch.alertDismiss();
+}
+
+function alertActions(ev) {
+  const row = el('div', 'alert-acts');
+  const add = (label, primary, run) => {
+    const btn = el('button', primary ? 'pri' : '', label);
+    btn.type = 'button';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      run();
+    });
+    row.append(btn);
+  };
+  if (ev.kind === 'start' && ev.meet) add('Entrar no Meet', true, () => openFromAlert(ev.meet));
+  if (ev.link) add('Abrir evento', !(ev.kind === 'start' && ev.meet), () => openFromAlert(ev.link));
+  if (ev.kind === 'reminder') add('Adiar 5 min', false, () => notch.alertSnooze(ev.id));
+  return row;
+}
+
+function buildAlert({ kind, event: ev }) {
+  let head;
+  if (kind === 'start') {
+    head = el('div', 'alert-card-body');
+    const main = el('div', 'alert-main');
+    const lead = el('small');
+    lead.append(labelNode('span', '', 'lead'), ` · ${eventRange(ev)}`);
+    main.append(lead, el('b', '', ev.title));
+    if (ev.meet) main.append(el('small', '', 'Google Meet'));
+    head.append(el('span', 'alert-bar'), main, labelNode('span', 'alert-count', 'count'));
+  } else {
+    head = el('div', 'alert-row-body');
+    head.append(el('span', 'alert-dot'), el('b', '', ev.title), el('span', 'muted alert-time', fmtTime(new Date(ev.start))), labelNode('span', 'alert-chip', 'chip'));
+  }
+  $('#alert').replaceChildren(head, alertActions(ev));
+  renderAlertLabels();
+}
+
+function restartClass(name) {
+  notchEl.classList.remove(name);
   void notchEl.offsetWidth; // restart the animation
-  notchEl.classList.add(`alert-${kind}`);
+  notchEl.classList.add(name);
+}
+
+function restartTimerBar(ms) {
+  notchEl.classList.remove('timed');
+  if (!ms) return;
+  notchEl.style.setProperty('--alert-timer', `${ms}ms`);
+  restartClass('timed');
+}
+
+function showAlertUi(a) {
+  const replacing = Boolean(alertState);
+  alertState = a;
+  const apply = () => {
+    notchEl.style.setProperty('--alert-ev', a.event.color);
+    buildAlert(a);
+    notchEl.classList.remove('arriving', 'sliding', 'departing', 'alert-exit', 'alert-pill', 'alert-card', 'swapping');
+    notchEl.classList.add('alerting', a.kind === 'start' ? 'alert-card' : 'alert-pill');
+    restartTimerBar(a.timerMs);
+    if (a.pulse) restartClass('pulse');
+    if (!replacing) later(520, () => notchEl.classList.add('shown'));
+  };
+  if (replacing) {
+    // A newer alert takes the place of the current one: fade the content, swap, fade back in.
+    notchEl.classList.add('swapping');
+    return later(120, apply);
+  }
+  if (!a.arrive) return apply();
+  // Hidden before: start above the screen, slide down as a pill, then grow.
+  notchEl.classList.add('arriving');
+  later(60, () => {
+    notchEl.classList.replace('arriving', 'sliding');
+    later(240, apply);
+  });
+}
+
+function hideAlertUi({ countdown = null, hide = false } = {}) {
+  if (!alertState) return setCountdown(countdown);
+  alertState = null;
+  if (hide) {
+    // Back to hidden: slide up as is, then reset out of sight (main conceals the window first).
+    notchEl.classList.add('departing');
+    later(340, () => {
+      notchEl.classList.add('instant');
+      notchEl.classList.remove(...ALERT_SHAPE);
+      setCountdown(countdown);
+      void notchEl.offsetWidth;
+      notchEl.classList.remove('instant');
+    });
+    return;
+  }
+  // Same frame: the alert shape morphs straight into the countdown pill (or the plain pill).
+  setCountdown(countdown);
+  notchEl.classList.add('alert-exit');
+  notchEl.classList.remove(...ALERT_SHAPE);
+  later(600, () => notchEl.classList.remove('alert-exit'));
+}
+
+notch.onAlert((a, info) => {
+  alertTimers.forEach(clearTimeout);
+  alertTimers = [];
+  if (a) showAlertUi(a);
+  else hideAlertUi(info);
 });
+notch.onCountdown((c) => setCountdown(c));
 notchEl.addEventListener('animationend', (e) => {
-  if (e.target === notchEl) notchEl.classList.remove('alert-reminder', 'alert-start');
+  if (e.animationName === 'alert-pulse') notchEl.classList.remove('pulse');
 });
+$('#alert').addEventListener('click', () => alertState && notch.alertOpen());
+
+// After an alert, the pill shows how long until the event (or when it ends).
+let countdownState = null;
+
+function setCountdown(c) {
+  countdownState = c;
+  notchEl.classList.toggle('countdown', Boolean(c));
+  if (!c) return;
+  $('#pill-countdown .alert-dot').style.setProperty('--alert-ev', c.color);
+  $('#pill-cd-title').textContent = c.title;
+  renderCountdown();
+}
+
+function renderCountdown() {
+  const c = countdownState;
+  if (!c) return;
+  const m = minutesUntil(c.start);
+  $('#pill-cd-when').textContent = c.kind === 'start' ? `termina ${fmtTime(new Date(c.end))}` : m <= 0 ? 'agora' : `em ${m} min`;
+}
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -133,6 +300,8 @@ function tickClock() {
   $('#pill-time').textContent = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const date = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' });
   $('#brand-date').textContent = date.charAt(0).toUpperCase() + date.slice(1);
+  renderCountdown();
+  renderAlertLabels();
 }
 
 // ---------- Calendar ----------
@@ -883,9 +1052,14 @@ $('#toggle-startup').addEventListener('click', async () => {
   }
 });
 
-// Calendar alerts settings: one toggle and stepper set per alert.
+// Calendar alerts settings: toggles, steppers and segmented choices, all keyed by config name.
 function renderAlertSettings(alerts) {
   for (const btn of document.querySelectorAll('[data-toggle]')) btn.setAttribute('aria-checked', String(alerts[btn.dataset.toggle]));
+  for (const seg of document.querySelectorAll('[data-seg]')) {
+    for (const btn of seg.querySelectorAll('button')) btn.setAttribute('aria-pressed', String(btn.dataset.value === alerts[seg.dataset.seg]));
+  }
+  $('#reminder-seconds').hidden = alerts.reminderDismiss !== 'timer';
+  $('#start-seconds').hidden = alerts.startDismiss !== 'timer';
   for (const box of document.querySelectorAll('.stepper')) {
     const value = alerts[box.dataset.key];
     box.querySelector('.stepper-value').textContent = value;
@@ -907,6 +1081,12 @@ async function saveAlerts(patch) {
 
 for (const btn of document.querySelectorAll('[data-toggle]')) {
   btn.addEventListener('click', () => saveAlerts({ [btn.dataset.toggle]: btn.getAttribute('aria-checked') !== 'true' }));
+}
+for (const seg of document.querySelectorAll('[data-seg]')) {
+  seg.addEventListener('click', (e) => {
+    const value = e.target.closest('[data-value]')?.dataset.value;
+    if (value && value !== state.config.alerts[seg.dataset.seg]) saveAlerts({ [seg.dataset.seg]: value });
+  });
 }
 for (const box of document.querySelectorAll('.stepper')) {
   box.addEventListener('click', (e) => {

@@ -62,18 +62,6 @@ i[data-icon] { display: inline-flex; }
   transition: width var(--anim-open), height var(--anim-open), border-radius var(--anim-open);
 }
 
-/* Calendar alerts. Blink lengths must match BLINK_MS in main.js; --alert-count comes from settings.
-   Inset glow only: an outer shadow is clipped square by the window bounds. */
-#notch.alert-reminder { --alert: #ffd23f; animation: alert-blink 1400ms ease-in-out var(--alert-count, 2); }
-#notch.alert-start { --alert: #ff3b30; animation: alert-blink 400ms ease-in-out var(--alert-count, 25); }
-@keyframes alert-blink {
-  50% {
-    border-color: var(--alert);
-    background: color-mix(in srgb, var(--alert) 35%, var(--bg));
-    box-shadow: inset 0 0 12px color-mix(in srgb, var(--alert) 60%, transparent);
-  }
-}
-
 #notch.vanish { opacity: 0; transition: opacity 140ms ease-out; }
 
 #notch.collapsed {
@@ -103,6 +91,128 @@ i[data-icon] { display: inline-flex; }
 /* Fade the pill in only once the shell has nearly finished shrinking. */
 #notch.collapsed #pill { opacity: 1; pointer-events: auto; transition: opacity 120ms 110ms; }
 #pill-time { font-family: var(--mono); font-weight: 500; }
+
+/* Countdown after an alert: replaces the media dot. */
+#pill-countdown { display: none; align-items: center; gap: 6px; min-width: 0; font-weight: 500; }
+#pill-countdown b { font-weight: 600; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pill-cd-when { color: var(--muted); white-space: nowrap; }
+#notch.countdown #pill-countdown { display: inline-flex; }
+#notch.countdown #pill-dot { display: none; }
+
+/* ---------- Calendar alerts ----------
+   Sizes must fit SIZE.alert and SIZE.countdown in main.js. Growing: width, then height.
+   Shrinking (.alert-exit): height, then width, straight into the target pill.
+   Glows are inset only: an outer shadow is clipped square by the window bounds. */
+
+#notch.collapsed.countdown { width: 300px; }
+#notch.collapsed.alert-pill { width: 410px; }
+#notch.collapsed.alert-pill.hover { height: 82px; border-radius: 0 0 16px 16px; }
+#notch.collapsed.alert-card { width: 470px; height: 86px; border-radius: 0 0 18px 18px; }
+#notch.collapsed.alert-card.hover { height: 130px; }
+
+#notch.collapsed.alerting {
+  transition: width 280ms var(--ease), height 280ms var(--ease) 170ms, border-radius 280ms var(--ease) 170ms, transform 240ms var(--ease);
+}
+/* Once grown, hover and stacked events resize at once, without the staged delay. */
+#notch.collapsed.alerting.shown { transition: width 240ms var(--ease), height 240ms var(--ease), border-radius 240ms var(--ease); }
+#notch.collapsed.alert-exit {
+  transition: width 260ms var(--ease) 150ms, height 220ms var(--ease), border-radius 220ms var(--ease), transform 240ms var(--ease);
+}
+#notch.arriving { transform: translate(-50%, -100%); transition: none; }
+#notch.sliding { transition: transform 240ms var(--ease); }
+/* Specific enough to beat the .alerting transitions it is applied on top of. */
+#notch.collapsed.alerting.departing { transform: translate(-50%, -100%); transition: transform 240ms var(--ease); }
+#notch.instant, #notch.instant * { transition: none !important; }
+
+#notch.alerting #pill { opacity: 0; pointer-events: none; transition: opacity 100ms; }
+#notch.alert-exit #pill { transition: opacity 180ms 260ms; }
+
+#alert {
+  position: absolute;
+  inset: 0 0 auto 0;
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity 100ms;
+}
+#notch.alerting #alert { opacity: 1; pointer-events: auto; transition: opacity 200ms 260ms; }
+#notch.alerting.shown #alert { transition: opacity 150ms; }
+/* A newer alert replacing this one: fade out, swap the content, fade back in. */
+#notch.alerting.swapping #alert { opacity: 0; transition: opacity 100ms; }
+
+.alert-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--alert-ev, var(--accent)); }
+.alert-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--alert-ev) 22%, transparent);
+  color: color-mix(in srgb, var(--alert-ev) 65%, white);
+}
+.alert-row-body {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.alert-row-body b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.alert-time { font-family: var(--mono); }
+.alert-card-body {
+  height: 86px;
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 8px 18px 0 16px;
+}
+.alert-bar { width: 4px; height: 52px; border-radius: 2px; background: var(--alert-ev); }
+.alert-main { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.alert-main small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alert-main b { font-size: 15.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alert-count { font-family: var(--mono); font-size: 20px; font-weight: 500; color: color-mix(in srgb, var(--alert-ev) 65%, white); }
+
+/* Revealed by hover. */
+.alert-acts { display: flex; gap: 8px; justify-content: center; padding: 6px 14px 0; opacity: 0; transition: opacity 100ms; }
+#notch.hover .alert-acts { opacity: 1; transition: opacity 160ms 140ms; }
+.alert-acts button {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  transition: filter 120ms;
+}
+.alert-acts button.pri {
+  background: color-mix(in srgb, var(--alert-ev) 26%, var(--raised));
+  border-color: color-mix(in srgb, var(--alert-ev) 45%, var(--border));
+}
+.alert-acts button:hover { filter: brightness(1.25); }
+
+#alert-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; opacity: 0; pointer-events: none; transition: opacity 200ms; }
+#alert-timer i { display: block; height: 100%; background: var(--alert-ev); transform-origin: left; }
+#notch.alerting.timed #alert-timer { opacity: 0.85; }
+#notch.timed #alert-timer i { animation: alert-timer var(--alert-timer) linear forwards; }
+#notch.hover #alert-timer i { animation-play-state: paused; }
+@keyframes alert-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* One glow in the event color when the alert opens. */
+#notch.pulse { animation: alert-pulse 1300ms ease-out 450ms 1 both; }
+@keyframes alert-pulse {
+  0% { box-shadow: inset 0 0 0 1px transparent; }
+  25% { box-shadow: inset 0 0 0 1.5px var(--alert-ev), inset 0 0 22px color-mix(in srgb, var(--alert-ev) 50%, transparent); }
+  100% { box-shadow: inset 0 0 0 1px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #notch.collapsed.alerting, #notch.collapsed.alert-exit, #notch.sliding, #notch.collapsed.alerting.departing { transition-duration: 1ms !important; transition-delay: 0ms !important; }
+  #notch.pulse { animation: none; }
+}
 
 #panel {
   position: absolute;
@@ -706,10 +816,28 @@ main {
 .alert-label .muted { font-size: 11.5px; }
 .alert-fields { display: flex; gap: 8px; transition: opacity 150ms; }
 .alert-row.off .alert-fields { opacity: 0.35; pointer-events: none; }
-.alert-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.alert-dot.yellow { background: #ffd23f; box-shadow: 0 0 8px #ffd23f80; }
-.alert-dot.red { background: #ff3b30; box-shadow: 0 0 8px #ff3b3080; }
-.alert-row.off .alert-dot { background: var(--muted); box-shadow: none; }
+.alert-group { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 4px; }
+
+.seg {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  padding: 2px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.seg button {
+  padding: 0 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: background 120ms, color 120ms;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed='true'] { background: var(--raised-active); color: var(--text); }
 
 .stepper {
   display: flex;
