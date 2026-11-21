@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULTS = {
-  assistantName: 'Sexta-feira',
+  assistantName: 'Alfredo',
   userName: '',
   hotkey: 'Control+Alt+Space',
   startWithWindows: false,
